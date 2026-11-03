@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { mockAnswer } from "@/lib/chat/mock";
 import { planTurn, type ChatLine } from "@/lib/chat/plan";
-import { parseChatRequest, MAX_TEXT_CHARS } from "@/lib/chat/validate";
+import { buildSystemPrompt, isRefusal } from "@/lib/chat/prompt";
+import { parseChatRequest, MAX_MESSAGES, MAX_TEXT_CHARS } from "@/lib/chat/validate";
 
 const user = (text: string): ChatLine => ({ role: "user", text });
 const bot = (text: string): ChatLine => ({ role: "assistant", text });
@@ -42,7 +43,60 @@ describe("planTurn", () => {
   it("still retrieves the real question inside a file request", () => {
     const plan = planTurn([user("Send me the VIP video and tell me the price")]);
     expect(plan.media?.items.map((m) => m.id)).toEqual(["video-vip-preview"]);
+    expect(plan.retrievalQuery).toBe("VIP price");
     expect(plan.chunks[0].chunkId).toBe("sea-view-skydiving#package-vip");
+  });
+
+  it.each([
+    "Send me the brochure and a video.",
+    "send me the pdf and a video",
+    "Hey, can you please share the brochure?",
+    "Can I watch a film of the jump?",
+    "I'd like to see the video",
+    "brochure pls",
+    "yes please send that brochure to me",
+  ])("leaves no leftover query for the pure file request %j", (message) => {
+    const plan = planTurn([user(message)]);
+    expect(plan.media?.items.length).toBeGreaterThan(0);
+    expect(plan.retrievalQuery).toBe("");
+    expect(plan.context).toMatch(/only asked for files/);
+  });
+
+  it("tells the model exactly which files are attached", () => {
+    const prompt = buildSystemPrompt(planTurn([user("send me the pdf and a video")]));
+    expect(prompt).toContain("Attached: Sea View Skydiving brochure (demo material); Sea View Skydiving film.");
+  });
+
+  it("tells the model when a file is unavailable", () => {
+    const prompt = buildSystemPrompt(planTurn([user("Can I see an ECO video?")]));
+    expect(prompt).toContain("Attached: nothing.");
+    expect(prompt).toMatch(/Unavailable: .*no video coverage/);
+  });
+
+  it("adds no file instructions to a normal question", () => {
+    expect(buildSystemPrompt(planTurn([user("Is Bangkok pickup available?")]))).not.toContain("FILES FOR THIS REPLY");
+  });
+});
+
+describe("isRefusal", () => {
+  it.each([
+    "I don't have that information on this page.",
+    "I don’t have pictures available to share.",
+    "Sorry, I can't send pictures.",
+    "I'm sorry, but I do not have that file.",
+    "Unfortunately, I couldn't find that.",
+    "I can't assist with that.",
+  ])("treats %j as a refusal", (reply) => {
+    expect(isRefusal(reply)).toBe(true);
+  });
+
+  it.each([
+    "The VIP package is ฿14,000 per person. I don't have details on discounts.",
+    "Yes, Bangkok pickup is available as a fixed-price add-on.",
+    "I've attached the brochure (demo material).",
+    "There is no ECO video because ECO has no video coverage.",
+  ])("treats %j as an answer", (reply) => {
+    expect(isRefusal(reply)).toBe(false);
   });
 });
 
@@ -70,6 +124,12 @@ describe("parseChatRequest", () => {
   it("accepts a normal conversation", () => {
     const result = parseChatRequest({ messages: [msg("user", "Hi"), msg("assistant", "Hello"), msg("user", "Price?")] });
     expect(result.ok && result.lines.at(-1)).toEqual({ role: "user", text: "Price?" });
+  });
+
+  it("explains the limit when a chat gets too long", () => {
+    const messages = Array.from({ length: MAX_MESSAGES + 1 }, (_, i) => msg("user", `q${i}`));
+    const result = parseChatRequest({ messages });
+    expect(result.ok === false && result.error).toMatch(/length limit/);
   });
 
   it.each([

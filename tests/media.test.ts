@@ -28,6 +28,7 @@ describe("media selection (edge cases)", () => {
     ["Which package gives me a video?", []],
     ["Is video coverage part of VIP?", []],
     ["How much is the brochure price for VIP?", []],
+    ["Which package should I pick if I want a video?", []],
   ])("treats %j as a knowledge question, not a file request", (message, expected) => {
     expect(ids(message)).toEqual(expected);
   });
@@ -38,6 +39,9 @@ describe("media selection (edge cases)", () => {
     ["Do you have a PDF I can download?", ["brochure-sea-view"]],
     ["Show me the VIP video", ["video-vip-preview"]],
     ["Can I watch the deluxe and VIP videos?", ["video-deluxe-preview", "video-vip-preview"]],
+    ["send me the pdf and a video", ["brochure-sea-view", "video-sea-view-film"]],
+    ["Send me the sky diving brochure", ["brochure-sea-view"]],
+    ["Do you have a sky dive video?", ["video-sea-view-film"]],
   ])("treats %j as a file request", (message, expected) => {
     expect(ids(message)).toEqual(expected);
   });

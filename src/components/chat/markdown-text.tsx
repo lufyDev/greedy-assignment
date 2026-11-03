@@ -3,6 +3,7 @@
 import type { TextMessagePartComponent } from "@assistant-ui/react";
 import { MarkdownTextPrimitive } from "@assistant-ui/react-markdown";
 import remarkGfm from "remark-gfm";
+import { MarkdownLink, MARKDOWN_CLASS } from "@/components/safe-markdown";
 
 /**
  * Assistant text rendered as Markdown. react-markdown escapes raw HTML (no
@@ -11,18 +12,7 @@ import remarkGfm from "remark-gfm";
 export const MarkdownText: TextMessagePartComponent = ({ text, status }) => {
   if (text === "" && status.type === "running") return <TypingIndicator />;
   return (
-    <MarkdownTextPrimitive
-      remarkPlugins={[remarkGfm]}
-      skipHtml
-      className="aui-md space-y-2 text-sm leading-relaxed [&_a]:font-semibold [&_a]:underline [&_a]:underline-offset-2 [&_li]:ml-4 [&_ol]:list-decimal [&_strong]:font-semibold [&_ul]:list-disc"
-      components={{
-        a: ({ href, children }) => (
-          <a href={href} target="_blank" rel="noreferrer noopener">
-            {children}
-          </a>
-        ),
-      }}
-    />
+    <MarkdownTextPrimitive remarkPlugins={[remarkGfm]} skipHtml className={MARKDOWN_CLASS} components={{ a: MarkdownLink }} />
   );
 };
 

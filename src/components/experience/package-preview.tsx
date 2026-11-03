@@ -2,8 +2,15 @@
 
 import Image from "next/image";
 import { Play } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { usePauseWhenHidden } from "@/components/use-pause-when-hidden";
 import type { ExperiencePackage } from "@/content/experience";
+
+function PreviewVideo({ src, poster, label }: { src: string; poster: string; label: string }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  usePauseWhenHidden(ref);
+  return <video ref={ref} className="absolute inset-0 h-full w-full bg-black object-cover" src={src} poster={poster} controls autoPlay playsInline aria-label={label} />;
+}
 
 /** Package media: a still for ECO, a click-to-play preview for Deluxe and VIP. */
 export function PackagePreview({ pkg }: { pkg: ExperiencePackage }) {
@@ -22,19 +29,7 @@ export function PackagePreview({ pkg }: { pkg: ExperiencePackage }) {
     );
   }
 
-  if (playing) {
-    return (
-      <video
-        className="absolute inset-0 h-full w-full bg-black object-cover"
-        src={preview.src}
-        poster={preview.poster}
-        controls
-        autoPlay
-        playsInline
-        aria-label={`${pkg.name} package preview video`}
-      />
-    );
-  }
+  if (playing) return <PreviewVideo src={preview.src} poster={preview.poster} label={`${pkg.name} package preview video`} />;
 
   return (
     <button

@@ -18,7 +18,7 @@ import type { MediaSelection } from "@/lib/media/types";
 import { mockAnswer } from "./mock";
 import { getLanguageModel, getModelInfo, type ModelInfo } from "./model";
 import type { TurnPlan } from "./plan";
-import { buildSystemPrompt } from "./prompt";
+import { buildSystemPrompt, isRefusal } from "./prompt";
 
 export const SHARE_MEDIA_TOOL = "share_media" as const;
 
@@ -131,7 +131,8 @@ export async function streamReply({
   const result = streamText({
     model: cfg.model,
     instructions: cfg.instructions,
-    messages: await convertToModelMessages(messages, { tools: cfg.tools }),
+    // A reply stopped mid-tool-call leaves a call with no result; skip it so the next turn still works.
+    messages: await convertToModelMessages(messages, { tools: cfg.tools, ignoreIncompleteToolCalls: true }),
     tools: cfg.tools,
     prepareStep: cfg.prepareStep,
     stopWhen: isStepCount(3),
@@ -141,13 +142,19 @@ export async function streamReply({
     onError: ({ error }) => console.error("[chat] model error:", error),
   });
 
+  let replyText = "";
   return createUIMessageStreamResponse({
     stream: toUIMessageStream<AgentTools, ChatUIMessage>({
       stream: result.stream,
       tools: cfg.tools,
       originalMessages: messages,
       sendReasoning: false,
-      messageMetadata: ({ part }) => (part.type === "start" ? metadata : undefined),
+      messageMetadata: ({ part }) => {
+        if (part.type === "start") return metadata;
+        if (part.type === "text-delta") replyText += part.text;
+        if (part.type === "finish" && isRefusal(replyText)) return { ...metadata, sources: [] };
+        return undefined;
+      },
       onError: () => FRIENDLY_ERROR,
     }),
   });
@@ -157,7 +164,8 @@ export async function streamReply({
 function mockStream(plan: TurnPlan, metadata: ReplyMetadata) {
   return createUIMessageStream<ChatUIMessage>({
     execute: async ({ writer }) => {
-      writer.write({ type: "start", messageMetadata: metadata });
+      const answer = mockAnswer(plan, plan.media);
+      writer.write({ type: "start", messageMetadata: isRefusal(answer) ? { ...metadata, sources: [] } : metadata });
       if (plan.media) {
         const toolCallId = `mock-${crypto.randomUUID()}`;
         writer.write({ type: "start-step" });
@@ -167,7 +175,7 @@ function mockStream(plan: TurnPlan, metadata: ReplyMetadata) {
       }
       writer.write({ type: "start-step" });
       writer.write({ type: "text-start", id: "mock-text" });
-      for (const word of mockAnswer(plan, plan.media).split(/(?<=\s)/)) {
+      for (const word of answer.split(/(?<=\s)/)) {
         writer.write({ type: "text-delta", id: "mock-text", delta: word });
         await new Promise((r) => setTimeout(r, 12));
       }

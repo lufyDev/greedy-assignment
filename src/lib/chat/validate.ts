@@ -24,6 +24,11 @@ export type ValidationResult = { ok: true; data: ChatRequest; lines: ChatLine[] 
 
 /** Validates the body and extracts plain-text conversation lines for planning. */
 export function parseChatRequest(body: unknown): ValidationResult {
+  const rawMessages = (body as { messages?: unknown } | null)?.messages;
+  if (Array.isArray(rawMessages) && rawMessages.length > MAX_MESSAGES) {
+    return { ok: false, error: "This chat has reached its length limit. Please reload the page to start a new one." };
+  }
+
   const parsed = chatRequestSchema.safeParse(body);
   if (!parsed.success) return { ok: false, error: "Invalid chat request." };
 

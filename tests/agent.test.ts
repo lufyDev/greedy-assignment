@@ -111,6 +111,64 @@ describe("streamReply with a model", () => {
     expect(model.doStreamCalls[0].prompt.filter((m) => m.role !== "system")).toHaveLength(3);
   });
 
+  it("drops the source links when the reply says it doesn't have the answer", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          chunks: [
+            { type: "text-start", id: "t" },
+            { type: "text-delta", id: "t", delta: "I don't have " },
+            { type: "text-delta", id: "t", delta: "the VIP refund policy on this page." },
+            { type: "text-end", id: "t" },
+            { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
+          ],
+        }),
+      }),
+    });
+    const plan = planTurn([{ role: "user", text: "What is the VIP refund policy?" }]);
+    expect(plan.chunks.length).toBeGreaterThan(0);
+    const chunks = await readStream(await streamReply({ plan, messages: [userMessage("1", plan.question)], model }));
+
+    const metadataChunks = chunks.filter((c) => c.messageMetadata);
+    expect(metadataChunks.at(0)?.messageMetadata.sources.length).toBeGreaterThan(0);
+    expect(metadataChunks.at(-1)?.messageMetadata.sources).toEqual([]);
+  });
+
+  it("keeps working after a reply was stopped mid-tool-call or failed empty", async () => {
+    const model = new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          chunks: [
+            { type: "text-start", id: "t" },
+            { type: "text-delta", id: "t", delta: "฿14,000." },
+            { type: "text-end", id: "t" },
+            { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
+          ],
+        }),
+      }),
+    });
+    const messages: ChatUIMessage[] = [
+      userMessage("1", "Send me a video"),
+      // Stopped by the customer: the tool call never got a result.
+      {
+        id: "2",
+        role: "assistant",
+        parts: [{ type: "tool-share_media", toolCallId: "call_1", state: "input-available", input: { pdf: false, video: true, packages: [] } }],
+      },
+      userMessage("3", "Sorry, how much is VIP?"),
+      // Failed before any output.
+      { id: "4", role: "assistant", parts: [] },
+      userMessage("5", "How much is VIP?"),
+    ];
+    const plan = planTurn([{ role: "user", text: "How much is VIP?" }]);
+    const chunks = await readStream(await streamReply({ plan, messages, model }));
+
+    expect(chunks.find((c) => c.type === "error")).toBeUndefined();
+    expect(chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("")).toBe("฿14,000.");
+    const sent = JSON.stringify(model.doStreamCalls[0].prompt);
+    expect(sent).not.toContain("call_1");
+  });
+
   it("turns a model failure into an error chunk the chat can show", async () => {
     const plan = planTurn([{ role: "user", text: "hi" }]);
     const chunks = await readStream(await streamReply({ plan, messages: [userMessage("1", "hi")], simulate: "model-error" }));

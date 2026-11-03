@@ -3,7 +3,7 @@ import { EXPERIENCE } from "@/content/experience";
 
 export function SiteFooter() {
   return (
-    <footer className="bg-ink py-12 text-sm text-white/60">
+    <footer className="bg-ink pt-12 pb-24 text-sm text-white/60">
       <div className="mx-auto flex max-w-7xl flex-col gap-6 px-5 sm:px-8 md:flex-row md:items-start md:justify-between">
         <div className="max-w-xl space-y-2">
           <p className="font-display text-lg font-bold tracking-[0.08em] text-white uppercase">Greedy Adventures · prototype</p>

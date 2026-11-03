@@ -1,6 +1,6 @@
-import { retrieve } from "@/lib/knowledge/retrieve";
+import { retrieve, searchableWords } from "@/lib/knowledge/retrieve";
 import type { RetrievedChunk } from "@/lib/knowledge/types";
-import { detectMediaRequest, isMediaRequested } from "@/lib/media/intent";
+import { detectMediaRequest, isMediaRequested, PDF_NOUN, VIDEO_NOUN } from "@/lib/media/intent";
 import { resolveMedia } from "@/lib/media/resolve";
 import type { MediaRequest, MediaSelection } from "@/lib/media/types";
 
@@ -25,8 +25,12 @@ const FOLLOW_UP = /\b(it|that|this|those|these|they|them|one|ones|same|else|also
 
 // In a file request these words describe the delivery, not a question for the page
 // ("send me a video of the experience" should not cite the package text about video).
-const FILE_REQUEST_WORDS =
-  /\b(brochures?|pdfs?|videos?|clips?|films?|footage|reels?|send|show|share|see|watch|view|download|open|play|experience|jump|skydiv\w*)\b/gi;
+const FILE_REQUEST_WORDS = new RegExp(
+  `${PDF_NOUN.source}|${VIDEO_NOUN.source}|\\b(send|show|share|see|watch|view|download|open|play|attach|email|e-mail|forward|give|want|like|love|let|thanks|thank|hi|hey|hello|pls|plz|both|too|some|again|experience|jump|sky\\s?div\\w*)\\b`,
+  "gi",
+);
+
+const FILE_ONLY_CONTEXT = "SOURCES: not needed. The customer only asked for files, so no website text was retrieved.";
 
 export function planTurn(history: ChatLine[]): TurnPlan {
   const userLines = history.filter((l) => l.role === "user");
@@ -38,12 +42,13 @@ export function planTurn(history: ChatLine[]): TurnPlan {
 
   const wordCount = question.split(/\s+/).filter(Boolean).length;
   const isFollowUp = !media && Boolean(previous) && (FOLLOW_UP.test(question) || wordCount <= 3);
-  const ownQuery = media ? question.replace(FILE_REQUEST_WORDS, " ").replace(/\s+/g, " ").trim() : question;
+  const ownQuery = media ? searchableWords(question.replace(FILE_REQUEST_WORDS, " ")) : question;
   const retrievalQuery = isFollowUp ? `${previous} ${question}` : ownQuery;
 
   const chunks = retrieve(retrievalQuery);
+  const context = media && !retrievalQuery ? FILE_ONLY_CONTEXT : formatContext(chunks);
 
-  return { question, isFollowUp, retrievalQuery, chunks, mediaRequest, media, context: formatContext(chunks) };
+  return { question, isFollowUp, retrievalQuery, chunks, mediaRequest, media, context };
 }
 
 export function formatContext(chunks: RetrievedChunk[]): string {

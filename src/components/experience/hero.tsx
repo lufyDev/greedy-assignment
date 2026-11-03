@@ -12,7 +12,7 @@ export function Hero() {
       <div className="absolute inset-0 bg-gradient-to-b from-ink/70 via-ink/20 to-ink/90" aria-hidden />
       <div className="absolute inset-0 bg-gradient-to-r from-ink/80 via-ink/30 to-transparent" aria-hidden />
 
-      <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col justify-end px-5 pt-32 pb-10 sm:px-8 sm:pb-14">
+      <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-1 flex-col justify-end px-5 pt-32 pb-20 sm:px-8">
         <p className="flex animate-rise items-center gap-2 text-xs font-semibold tracking-[0.3em] text-sky uppercase">
           <MapPin className="size-3.5" aria-hidden />
           {EXPERIENCE.eyebrow} · Thailand

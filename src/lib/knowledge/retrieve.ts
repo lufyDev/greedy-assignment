@@ -10,7 +10,7 @@ import type { RetrievedChunk, WebsiteSource } from "./types";
  */
 
 const STOPWORDS = new Set(
-  "a about an and any are as at be by can could do does for from get got have how i if in is it its know me my need of on or our please should so take tell than that the their them there these this those to us was we what when which who will with would you your".split(
+  "a about an and any are as at be by can could do does for from get got have how i if in is it its know me my need no of ok okay on or our please should so sure take tell than that the their them then there these this those to us was we what when which who will with would yeah yep yes you your".split(
     " ",
   ),
 );
@@ -73,12 +73,22 @@ const B = 0.75;
 export function tokenize(text: string): string[] {
   return text
     .toLowerCase()
+    .replace(/[’'](d|m|ve|ll|re)\b/g, "") // "I'd" must not become "id" and match "photo ID"
     .replace(/[’']/g, "")
     .replace(/฿/g, " ฿ ")
     .split(/[^a-z0-9฿,\-]+/)
     .map((t) => t.replace(/^[,\-]+|[,\-]+$/g, ""))
     .filter((t) => t.length > 0 && !STOPWORDS.has(t))
     .map(stem);
+}
+
+/** The words a search can use, in their original form: "me the VIP price?" → "VIP price". */
+export function searchableWords(text: string): string {
+  return text
+    .split(/\s+/)
+    .map((word) => word.replace(/^[^\p{L}\p{N}฿]+|[^\p{L}\p{N}฿]+$/gu, ""))
+    .filter((word) => word && !STOPWORDS.has(word.toLowerCase().replace(/[’'](d|m|ve|ll|re|s)$/, "")))
+    .join(" ");
 }
 
 /** Crude suffix stripping so "includes", "included" and "include" meet at "includ". */

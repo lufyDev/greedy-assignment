@@ -69,15 +69,15 @@ export default function KnowledgePage() {
               <div className="border-b border-line p-5">
                 <h3 className="text-lg font-semibold">{source.title}</h3>
                 <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
-                  <a href={source.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-ink underline-offset-4 hover:underline">
-                    {source.url} <ArrowUpRight className="size-3.5" aria-hidden />
+                  <a href={source.url} target="_blank" rel="noreferrer" className="min-w-0 wrap-anywhere text-ink underline-offset-4 hover:underline">
+                    {source.url} <ArrowUpRight className="inline size-3.5" aria-hidden />
                   </a>
                   <span>Captured {source.capturedAt}</span>
                 </p>
               </div>
               <dl className="divide-y divide-line">
                 {source.sections.map((section) => (
-                  <div key={section.id} className="grid gap-1 p-5 sm:grid-cols-[14rem_1fr] sm:gap-6">
+                  <div key={section.id} className="grid grid-cols-1 gap-1 p-5 sm:grid-cols-[14rem_minmax(0,1fr)] sm:gap-6">
                     <dt className="text-sm font-semibold">
                       {section.heading}
                       <span className="mt-0.5 block font-mono text-xs font-normal text-muted">#{section.id}</span>
@@ -94,11 +94,11 @@ export default function KnowledgePage() {
           <h2 id="media-title" className="font-display text-3xl font-bold uppercase">
             PDFs and videos
           </h2>
-          <ul className="mt-5 grid gap-4 sm:grid-cols-2">
+          <ul className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
             {media.map((item) => {
               const Icon = item.kind === "pdf" ? FileText : Video;
               return (
-                <li key={item.id} className="flex gap-4 rounded-2xl border border-line bg-white p-5">
+                <li key={item.id} className="flex min-w-0 gap-4 rounded-2xl border border-line bg-white p-5">
                   <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-sand text-sunset">
                     <Icon className="size-5" aria-hidden />
                   </span>

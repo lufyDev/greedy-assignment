@@ -24,7 +24,7 @@ const SUGGESTIONS = [
 export function Thread() {
   return (
     <ThreadPrimitive.Root className="flex h-full min-h-0 flex-col">
-      <ThreadPrimitive.Viewport className="relative flex flex-1 flex-col gap-5 overflow-y-auto px-4 py-5" aria-live="polite">
+      <ThreadPrimitive.Viewport className="relative flex flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-4 py-5" aria-live="polite">
         <AuiIf condition={(s) => s.thread.isEmpty}>
           <Welcome />
         </AuiIf>
@@ -70,7 +70,7 @@ function Welcome() {
 function UserMessage() {
   return (
     <MessagePrimitive.Root className="flex animate-pop justify-end">
-      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap text-white">
+      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm leading-relaxed wrap-anywhere whitespace-pre-wrap text-white">
         <span className="sr-only">You said: </span>
         <MessagePrimitive.Parts />
       </div>
@@ -121,13 +121,12 @@ function ReplyFooter() {
           href={first.url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-2.5 py-1 font-medium text-ink transition hover:border-sunset"
+          className="rounded-2xl border border-line bg-white px-2.5 py-1 font-medium text-ink transition hover:border-sunset"
           title={sources.map((s) => s.heading).join(" · ")}
         >
-          <ExternalLink className="size-3" aria-hidden />
-          Source: Sea View Skydiving page
-          <span className="text-muted">· {sources.map((s) => s.heading.replace(/^FAQ: /, "")).slice(0, 2).join(", ")}</span>
-          <span className="sr-only">(opens greedyadventures.com)</span>
+          <ExternalLink className="mr-1.5 inline size-3 align-[-1px]" aria-hidden />
+          Source: Sea View Skydiving page <span className="text-muted">· {first.heading.replace(/^FAQ: /, "")}</span>
+          <span className="sr-only"> (opens greedyadventures.com)</span>
         </a>
       )}
       {mode === "mock" && (
@@ -144,10 +143,11 @@ function Composer() {
     <ComposerPrimitive.Root className="border-t border-line bg-white p-3">
       <div className="flex items-end gap-2 rounded-2xl border border-line bg-sand/50 p-1.5 focus-within:border-ink">
         <ComposerPrimitive.Input
+          name="message"
           rows={1}
           maxLength={1000}
           submitMode="enter"
-          placeholder="Ask about packages, the day, pickup…"
+          placeholder="Ask about the jump or packages…"
           aria-label="Message the Greedy Adventures assistant"
           className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-muted focus-visible:outline-none"
         />

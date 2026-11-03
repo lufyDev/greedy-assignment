@@ -88,12 +88,12 @@ It never shows API keys and stores no conversations; test runs are single-questi
 npm test
 ```
 
-49 tests, no API key needed:
+78 tests, no API key needed:
 
 - `tests/media.test.ts`: media selection for the four brief prompts; knowledge questions that mention "video" but are not file requests; ECO video and other-activity requests reported as unavailable; missing catalog files.
-- `tests/retrieve.test.ts`: retrieval ranking and "no match" for uncovered topics.
-- `tests/plan.test.ts`: follow-up retrieval, file requests not citing unrelated sections, mock-mode fallbacks, request validation (system-message injection, length, roles).
-- `tests/agent.test.ts`: the real model path driven by the AI SDK's `MockLanguageModelV4`: `share_media` is forced for file requests and the rules' selection wins over the model's arguments; the model can still pick media itself; only retrieved source text reaches the model; the whole conversation is sent (memory); model failures become an error the chat shows.
+- `tests/retrieve.test.ts`: retrieval ranking, "no match" for uncovered topics, filler words and contractions ("I'd" is not "ID").
+- `tests/plan.test.ts`: follow-up retrieval, pure file requests needing no page text, the exact files named to the model, refusal detection, mock-mode fallbacks, request validation (system-message injection, length, roles).
+- `tests/agent.test.ts`: the real model path driven by the AI SDK's `MockLanguageModelV4`: `share_media` is forced for file requests and the rules' selection wins over the model's arguments; the model can still pick media itself; only retrieved source text reaches the model; the whole conversation is sent (memory); replies that say they can't answer drop their source link; a reply stopped mid-tool-call doesn't break the next turn; model failures become an error the chat shows.
 
 ### Manual
 
@@ -109,8 +109,9 @@ Run each in the chat (bottom-right button), in order, in one conversation:
 | 6 | Can I see an ECO video? | "Video unavailable" note, no substitute file |
 | 7 | Is there a weight limit? | Says the page doesn't cover it, suggests contacting the team |
 | 8 | Send me the paragliding brochure | Says there are no files for paragliding |
+| 9 | What is the VIP refund policy? | Says the page doesn't cover it, with no source link under the reply |
 
-Model failure: open `/?simulate=model-error`, ask anything → the chat shows an error message with a Retry button and the page keeps working. Without a key, check that replies show the **Mock mode** label.
+Model failure: open `/?simulate=model-error`, ask anything → the chat shows an error message with a Try again button and the page keeps working. Without a key, check that replies show the **Mock mode** label.
 
 Knowledge view: ask question 2 above in "Test a question" → the source block contains the VIP section; ask question 5 → media shows the brochure and film.
 

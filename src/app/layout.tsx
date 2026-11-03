@@ -17,8 +17,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} ${display.variable} h-full antialiased`}>
-      <body className="min-h-full font-sans">{children}</body>
+    // suppressHydrationWarning: browser extensions add attributes to <html> and <body> before React loads.
+    // data-scroll-behavior: keeps smooth anchor scrolling but lets Next jump instantly between routes.
+    <html lang="en" className={`${inter.variable} ${display.variable} h-full antialiased`} data-scroll-behavior="smooth" suppressHydrationWarning>
+      <body className="min-h-full font-sans" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

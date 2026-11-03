@@ -2,6 +2,7 @@
 
 import { AlertTriangle, FileText, Loader2, Play, Video } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import { SafeMarkdown } from "@/components/safe-markdown";
 import type { TurnTrace } from "@/lib/chat/agent";
 
 const EXAMPLES = [
@@ -50,6 +51,7 @@ export function KnowledgeInspector() {
         </label>
         <input
           id="inspect-question"
+          name="question"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           maxLength={1000}
@@ -116,10 +118,14 @@ function TraceView({ trace }: { trace: TurnTrace }) {
   return (
     <ol className="space-y-6">
       <Step n={1} title="Retrieval">
-        <p className="text-muted">
-          Query: <code className="rounded bg-sand px-1.5 py-0.5 text-ink">{trace.retrievalQuery || "(empty after removing file words)"}</code>
-        </p>
-        {trace.chunks.length === 0 ? (
+        {!trace.retrievalQuery ? (
+          <p className="text-muted">Skipped. This is only a file request, so no website text is needed.</p>
+        ) : (
+          <p className="wrap-anywhere text-muted">
+            Query: <code className="rounded bg-sand px-1.5 py-0.5 text-ink">{trace.retrievalQuery}</code>
+          </p>
+        )}
+        {!trace.retrievalQuery ? null : trace.chunks.length === 0 ? (
           <p className="mt-2 text-muted">No section matched, so the model is told the page doesn&apos;t cover this.</p>
         ) : (
           <ul className="mt-2 flex flex-wrap gap-2">
@@ -148,7 +154,7 @@ function TraceView({ trace }: { trace: TurnTrace }) {
         {trace.media && (
           <ul className="mt-2 space-y-1.5">
             {trace.media.items.map((m) => (
-              <li key={m.id} className="flex items-center gap-2">
+              <li key={m.id} className="flex flex-wrap items-center gap-x-2">
                 {m.kind === "pdf" ? <FileText className="size-4 text-sunset" aria-hidden /> : <Video className="size-4 text-sunset" aria-hidden />}
                 <span className="font-medium">{m.title}</span>
                 <span className="font-mono text-xs text-muted">{m.id}</span>
@@ -170,7 +176,9 @@ function TraceView({ trace }: { trace: TurnTrace }) {
             {trace.error}
           </p>
         ) : (
-          <p className="rounded-xl border border-line bg-sand/50 p-4 leading-relaxed whitespace-pre-wrap">{trace.answer}</p>
+          <div className="rounded-xl border border-line bg-sand/50 p-4">
+            <SafeMarkdown>{trace.answer ?? ""}</SafeMarkdown>
+          </div>
         )}
       </Step>
     </ol>

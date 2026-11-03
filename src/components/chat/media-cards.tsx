@@ -1,7 +1,8 @@
 "use client";
 
 import { AlertTriangle, Download, ExternalLink, FileText, Play } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { usePauseWhenHidden } from "@/components/use-pause-when-hidden";
 import type { MediaItem } from "@/lib/media/catalog";
 import type { MediaSelection } from "@/lib/media/types";
 
@@ -56,6 +57,8 @@ export function PdfCard({ item }: { item: MediaItem }) {
 
 export function VideoCard({ item }: { item: MediaItem }) {
   const [failed, setFailed] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  usePauseWhenHidden(videoRef);
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-white">
       {failed ? (
@@ -65,6 +68,7 @@ export function VideoCard({ item }: { item: MediaItem }) {
         </div>
       ) : (
         <video
+          ref={videoRef}
           className="aspect-video w-full bg-black"
           src={item.url}
           poster={item.posterUrl}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { OpenChatButton } from "@/components/chat/open-chat-button";
+import { MobileNav } from "./mobile-nav";
 
 const NAV = [
   { href: "#packages", label: "Packages" },
@@ -43,6 +44,7 @@ export function SiteHeader() {
           <OpenChatButton className="hidden rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink shadow-lg shadow-black/10 transition hover:bg-sand sm:inline-block">
             Ask our guide
           </OpenChatButton>
+          <MobileNav items={NAV} />
         </div>
       </div>
     </header>

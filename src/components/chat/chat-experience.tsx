@@ -76,7 +76,7 @@ export function ChatExperience({ children }: { children: ReactNode }) {
                 <span className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full border-2 border-ink bg-emerald-400" aria-hidden />
               </span>
               <div>
-                <h2 id="chat-panel-title" className="text-sm font-semibold">
+                <h2 id="chat-panel-title" className="text-sm font-semibold whitespace-nowrap">
                   Greedy Adventures guide
                 </h2>
                 <p className="text-xs whitespace-nowrap text-white/60">Sea View Skydiving · Pattaya</p>
@@ -85,9 +85,9 @@ export function ChatExperience({ children }: { children: ReactNode }) {
             <div className="flex items-center gap-1">
               <Link
                 href="/knowledge"
-                className="rounded-lg px-2 py-1.5 text-xs whitespace-nowrap text-white/70 transition hover:bg-white/10 hover:text-white"
+                className="hidden rounded-lg px-2 py-1.5 text-xs whitespace-nowrap text-white/70 transition hover:bg-white/10 hover:text-white sm:block"
               >
-                Knowledge<span className="hidden sm:inline"> view</span>
+                Knowledge view
               </Link>
               <button
                 type="button"

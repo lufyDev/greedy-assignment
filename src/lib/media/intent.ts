@@ -8,21 +8,22 @@ import type { MediaRequest, PackageId } from "./types";
  * only writes the words around them.
  */
 
-const PDF_NOUN =
+export const PDF_NOUN =
   /\b(brochures?|pdfs?|leaflets?|flyers?|pamphlets?|booklets?|catalog(?:ue)?s?|info(?:rmation)?\s+(?:sheet|pack)|fact\s?sheets?|price\s?list)\b/;
-const VIDEO_NOUN = /\b(videos?|clips?|films?|footage|reels?|movies?)\b/;
+export const VIDEO_NOUN = /\b(videos?|clips?|films?|footage|reels?|movies?)\b/;
 
 // Verbs that clearly ask for a file to be delivered.
 const STRONG_CUE = /\b(send|show|share|watch|play|download|open|attach|email|e-mail|forward)\b/;
 // Softer request phrasing ("can I see", "do you have", "I'd like").
 const SOFT_CUE =
   /\b(see|view)\b|\b(can|could|may|would|will)\s+(i|we|you)\s+(please\s+)?(have|get|grab|see|watch|view)\b|\b(give|get)\s+me\b|\b(i|we)(?:'d|\s+would)?\s+(like|love|want|need)\b|\bplease\b|\bdo\s+you\s+have\b|\bis\s+there\b|\bany\b/;
-// Questions about what a package contains ("does Deluxe include video?") are
-// knowledge questions, not file requests.
-const INCLUSION_CUE = /\b(includes?|included|including|comes?\s+with|part\s+of|coverage|covers?)\b/;
+// Questions about what a package contains ("does Deluxe include video?", "which
+// package if I want a video?") are knowledge questions, not file requests.
+const INCLUSION_CUE = /\b(includes?|included|including|comes?\s+with|part\s+of|coverage|covers?|which\s+(?:package|one|option)s?)\b/;
 
+// The lookbehind keeps "sky diving" and "sky dive" from counting as another activity.
 const OTHER_EXPERIENCES =
-  /\b(paragliding|paraglide|scuba|diving|dive|bungee|bungy|wingsuit|rafting|trek(?:king)?|surf(?:ing)?|snorkel(?:ing|ling)?|zipline)\b/;
+  /(?<!sky[\s-])\b(paragliding|paraglide|scuba|diving|dive|bungee|bungy|wingsuit|rafting|trek(?:king)?|surf(?:ing)?|snorkel(?:ing|ling)?|zipline)\b/;
 
 const PACKAGES: PackageId[] = ["eco", "deluxe", "vip"];
 
