@@ -19,8 +19,6 @@ export function mockAnswer(plan: TurnPlan, media: MediaSelection | null): string
   }
 
   const [best] = plan.chunks;
-  if (!best) {
-    return "I couldn't find that on the Sea View Skydiving page, so I don't want to guess. The Greedy Adventures team can help with anything not covered there.";
-  }
+  if (!best) return plan.fixedReply ?? "Happy to help. Ask me anything about Sea View Skydiving.";
   return `From the Sea View Skydiving page (${best.heading}): ${best.text}`;
 }

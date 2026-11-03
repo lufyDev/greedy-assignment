@@ -9,6 +9,7 @@ import {
   tool,
   toUIMessageStream,
   type LanguageModel,
+  type ModelMessage,
   type UIMessage,
 } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
@@ -18,7 +19,7 @@ import type { MediaSelection } from "@/lib/media/types";
 import { mockAnswer } from "./mock";
 import { getLanguageModel, getModelInfo, type ModelInfo } from "./model";
 import type { TurnPlan } from "./plan";
-import { buildSystemPrompt, isRefusal } from "./prompt";
+import { buildSystemPrompt, GROUNDING_REMINDER, isRefusal } from "./prompt";
 
 export const SHARE_MEDIA_TOOL = "share_media" as const;
 
@@ -112,6 +113,14 @@ function replyMetadata(plan: TurnPlan, info: ModelInfo): ReplyMetadata {
 
 const FRIENDLY_ERROR = "Sorry, I couldn't reach the assistant just now. Please try again in a moment.";
 
+/** Adds the grounding reminder after the customer's latest message, where it can't fade as the chat grows. */
+function withGroundingReminder(messages: ModelMessage[]): ModelMessage[] {
+  const last = messages.at(-1);
+  if (last?.role !== "user") return messages;
+  const content = typeof last.content === "string" ? [{ type: "text" as const, text: last.content }] : last.content;
+  return [...messages.slice(0, -1), { ...last, content: [...content, { type: "text", text: GROUNDING_REMINDER }] }];
+}
+
 /** Streams one assistant reply in the AI SDK UI message protocol (what assistant-ui consumes). */
 export async function streamReply({
   plan,
@@ -126,18 +135,21 @@ export async function streamReply({
   const cfg = agentConfig(plan, options, () => {});
   const metadata = replyMetadata(plan, cfg.info);
 
-  if (!cfg.model) return createUIMessageStreamResponse({ stream: mockStream(plan, metadata) });
+  if (plan.fixedReply && !options.simulate) {
+    return createUIMessageStreamResponse({ stream: fixedStream(plan, metadata, plan.fixedReply) });
+  }
+  if (!cfg.model) return createUIMessageStreamResponse({ stream: fixedStream(plan, metadata, mockAnswer(plan, plan.media)) });
 
   const result = streamText({
     model: cfg.model,
     instructions: cfg.instructions,
     // A reply stopped mid-tool-call leaves a call with no result; skip it so the next turn still works.
-    messages: await convertToModelMessages(messages, { tools: cfg.tools, ignoreIncompleteToolCalls: true }),
+    messages: withGroundingReminder(await convertToModelMessages(messages, { tools: cfg.tools, ignoreIncompleteToolCalls: true })),
     tools: cfg.tools,
     prepareStep: cfg.prepareStep,
     stopWhen: isStepCount(3),
     maxRetries: 1,
-    temperature: 0.2,
+    temperature: 0,
     abortSignal,
     onError: ({ error }) => console.error("[chat] model error:", error),
   });
@@ -160,11 +172,10 @@ export async function streamReply({
   });
 }
 
-/** Mock mode: same plan and wire format, deterministic text instead of an LLM. */
-function mockStream(plan: TurnPlan, metadata: ReplyMetadata) {
+/** Fixed replies and mock mode: same plan and wire format, set text instead of an LLM. */
+function fixedStream(plan: TurnPlan, metadata: ReplyMetadata, answer: string) {
   return createUIMessageStream<ChatUIMessage>({
     execute: async ({ writer }) => {
-      const answer = mockAnswer(plan, plan.media);
       writer.write({ type: "start", messageMetadata: isRefusal(answer) ? { ...metadata, sources: [] } : metadata });
       if (plan.media) {
         const toolCallId = `mock-${crypto.randomUUID()}`;
@@ -199,6 +210,8 @@ export type TurnTrace = {
   mediaRequest: TurnPlan["mediaRequest"];
   media: MediaSelection | null;
   mediaSelectedBy: "rules" | "model" | null;
+  /** True when nothing on the page matched, so the model was not called. */
+  usedFixedReply: boolean;
   answer: string | null;
   error: string | null;
   durationMs: number;
@@ -221,9 +234,14 @@ export async function traceTurn(plan: TurnPlan, options: AgentOptions = {}): Pro
     retrievalQuery: plan.retrievalQuery,
     chunks: plan.chunks,
     contextPassedToModel: plan.context,
-    instructions: cfg.instructions,
+    instructions: `${cfg.instructions}\n\nAdded after the customer's message:\n${GROUNDING_REMINDER}`,
     mediaRequest: plan.mediaRequest,
+    usedFixedReply: false,
   };
+
+  if (plan.fixedReply && !options.simulate) {
+    return { ...base, usedFixedReply: true, media: null, mediaSelectedBy: null, answer: plan.fixedReply, error: null, durationMs: Date.now() - started };
+  }
 
   if (!cfg.model) {
     return {
@@ -240,12 +258,12 @@ export async function traceTurn(plan: TurnPlan, options: AgentOptions = {}): Pro
     const result = await generateText({
       model: cfg.model,
       instructions: cfg.instructions,
-      prompt: plan.question,
+      messages: withGroundingReminder([{ role: "user", content: plan.question }]),
       tools: cfg.tools,
       prepareStep: cfg.prepareStep,
       stopWhen: isStepCount(3),
       maxRetries: 1,
-      temperature: 0.2,
+      temperature: 0,
     });
     return { ...base, media, mediaSelectedBy, answer: result.text, error: null, durationMs: Date.now() - started };
   } catch (err) {

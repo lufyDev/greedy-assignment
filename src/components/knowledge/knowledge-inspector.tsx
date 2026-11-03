@@ -56,7 +56,7 @@ export function KnowledgeInspector() {
           onChange={(e) => setQuestion(e.target.value)}
           maxLength={1000}
           placeholder="Ask a test question…"
-          className="min-w-0 flex-1 rounded-xl border border-line bg-sand/50 px-4 py-3 text-sm outline-none focus:border-ink"
+          className="min-w-0 flex-1 rounded-xl border border-line bg-sand/50 px-4 py-3 text-base outline-none focus:border-ink sm:text-sm"
         />
         <button
           type="submit"
@@ -125,7 +125,9 @@ function TraceView({ trace }: { trace: TurnTrace }) {
             Query: <code className="rounded bg-sand px-1.5 py-0.5 text-ink">{trace.retrievalQuery}</code>
           </p>
         )}
-        {!trace.retrievalQuery ? null : trace.chunks.length === 0 ? (
+        {!trace.retrievalQuery ? null : trace.usedFixedReply ? (
+          <p className="mt-2 text-muted">No section matched, so the model is not called and can&apos;t guess. The fixed reply below is sent.</p>
+        ) : trace.chunks.length === 0 ? (
           <p className="mt-2 text-muted">No section matched, so the model is told the page doesn&apos;t cover this.</p>
         ) : (
           <ul className="mt-2 flex flex-wrap gap-2">
@@ -139,11 +141,17 @@ function TraceView({ trace }: { trace: TurnTrace }) {
       </Step>
 
       <Step n={2} title="Exact source text passed to the model">
-        <pre className="max-h-72 overflow-auto rounded-xl bg-ink p-4 text-xs leading-relaxed whitespace-pre-wrap text-white/90">{trace.contextPassedToModel}</pre>
-        <details className="mt-2">
-          <summary className="cursor-pointer text-xs font-semibold text-muted">Full instructions sent with it</summary>
-          <pre className="mt-2 max-h-72 overflow-auto rounded-xl bg-sand p-4 text-xs leading-relaxed whitespace-pre-wrap">{trace.instructions}</pre>
-        </details>
+        {trace.usedFixedReply ? (
+          <p className="text-muted">Nothing was passed. The model was not called for this question.</p>
+        ) : (
+          <>
+            <pre className="max-h-72 overflow-auto rounded-xl bg-ink p-4 text-xs leading-relaxed whitespace-pre-wrap text-white/90">{trace.contextPassedToModel}</pre>
+            <details className="mt-2">
+              <summary className="cursor-pointer text-xs font-semibold text-muted">Full instructions sent with it</summary>
+              <pre className="mt-2 max-h-72 overflow-auto rounded-xl bg-sand p-4 text-xs leading-relaxed whitespace-pre-wrap">{trace.instructions}</pre>
+            </details>
+          </>
+        )}
       </Step>
 
       <Step n={3} title="Media decision">
@@ -170,7 +178,7 @@ function TraceView({ trace }: { trace: TurnTrace }) {
         )}
       </Step>
 
-      <Step n={4} title={`Answer · ${trace.mode === "mock" ? "Mock mode" : trace.model} · ${trace.durationMs} ms`}>
+      <Step n={4} title={`Answer · ${trace.usedFixedReply ? "fixed reply, no model call" : trace.mode === "mock" ? "Mock mode" : trace.model} · ${trace.durationMs} ms`}>
         {trace.error ? (
           <p role="alert" className="text-red-800">
             {trace.error}

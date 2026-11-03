@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mockAnswer } from "@/lib/chat/mock";
-import { planTurn, type ChatLine } from "@/lib/chat/plan";
+import { NOT_COVERED_REPLY, planTurn, type ChatLine } from "@/lib/chat/plan";
 import { buildSystemPrompt, isRefusal } from "@/lib/chat/prompt";
 import { parseChatRequest, MAX_MESSAGES, MAX_TEXT_CHARS } from "@/lib/chat/validate";
 
@@ -32,6 +32,22 @@ describe("planTurn", () => {
     const plan = planTurn([user("Is there a weight limit?")]);
     expect(plan.chunks).toEqual([]);
     expect(plan.context).toMatch(/none of the captured website text/);
+    expect(plan.fixedReply).toBe(NOT_COVERED_REPLY);
+  });
+
+  it.each(["hello", "Thanks!", "ok thanks", "Yes please", "Good morning"])("lets the model reply to the small talk %j", (message) => {
+    expect(planTurn([user(message)]).fixedReply).toBeNull();
+  });
+
+  it.each(["Is Bangkok pickup available?", "How do I book?", "How can I reach you by phone?", "Do you pick up from my hotel?"])(
+    "does not block the answerable question %j",
+    (message) => {
+      expect(planTurn([user(message)]).fixedReply).toBeNull();
+    },
+  );
+
+  it("does not use the fixed reply for a file request", () => {
+    expect(planTurn([user("Send me the paragliding brochure")]).fixedReply).toBeNull();
   });
 
   it("selects both files for 'brochure and a video' without citing unrelated sections", () => {
@@ -108,7 +124,7 @@ describe("mockAnswer (fallback without a model)", () => {
 
   it("says it does not know instead of guessing", () => {
     const plan = planTurn([user("Can I pay with crypto?")]);
-    expect(mockAnswer(plan, plan.media)).toMatch(/couldn't find that/);
+    expect(mockAnswer(plan, plan.media)).toBe(NOT_COVERED_REPLY);
   });
 
   it("acknowledges an unavailable file without inventing one", () => {

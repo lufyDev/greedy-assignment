@@ -66,6 +66,26 @@ describe("traceTurn with a model", () => {
     expect(system).not.toContain("฿14,000");
   });
 
+  it("does not call the model when nothing on the page matches, so it can't guess", async () => {
+    const model = new MockLanguageModelV4({ doGenerate: textStep("The maximum weight is 100 kg.") });
+    const trace = await traceTurn(planTurn([{ role: "user", text: "Is there a weight limit?" }]), { model });
+
+    expect(model.doGenerateCalls).toHaveLength(0);
+    expect(trace.usedFixedReply).toBe(true);
+    expect(trace.answer).toMatch(/don't have that information/);
+    expect(trace.answer).not.toMatch(/100 kg/);
+  });
+
+  it("repeats the grounding rule right after the customer's message", async () => {
+    const model = new MockLanguageModelV4({ doGenerate: textStep("I don't have that information on this page.") });
+    await traceTurn(planTurn([{ role: "user", text: "What is the weight limit for the VIP package?" }]), { model });
+
+    const last = model.doGenerateCalls[0].prompt.at(-1);
+    expect(last?.role).toBe("user");
+    expect(JSON.stringify(last?.content)).toContain("What is the weight limit for the VIP package?");
+    expect(JSON.stringify(last?.content)).toContain("Never guess");
+  });
+
   it("reports a model failure instead of an answer", async () => {
     const trace = await traceTurn(planTurn([{ role: "user", text: "What is included?" }]), { simulate: "model-error" });
     expect(trace.answer).toBeNull();
@@ -109,6 +129,27 @@ describe("streamReply with a model", () => {
     expect(chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("")).toBe("Deluxe is ฿12,500.");
     // Memory: all three turns reach the model.
     expect(model.doStreamCalls[0].prompt.filter((m) => m.role !== "system")).toHaveLength(3);
+  });
+
+  it("sends the fixed reply in a long chat without calling the model", async () => {
+    const model = new MockLanguageModelV4({ doStream: async () => { throw new Error("must not be called"); } });
+    const messages: ChatUIMessage[] = [
+      userMessage("1", "How much is VIP?"),
+      { id: "2", role: "assistant", parts: [{ type: "text", text: "฿14,000 per person." }] },
+      userMessage("3", "Is there a weight limit?"),
+    ];
+    const plan = planTurn([{ role: "user", text: "How much is VIP?" }, { role: "assistant", text: "฿14,000 per person." }, { role: "user", text: "Is there a weight limit?" }]);
+    const chunks = await readStream(await streamReply({ plan, messages, model }));
+
+    expect(model.doStreamCalls).toHaveLength(0);
+    expect(chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("")).toMatch(/don't have that information/);
+    expect(chunks.find((c) => c.type === "start").messageMetadata.sources).toEqual([]);
+  });
+
+  it("still shows the failure path for a no-match question when simulating", async () => {
+    const plan = planTurn([{ role: "user", text: "Is there a weight limit?" }]);
+    const chunks = await readStream(await streamReply({ plan, messages: [userMessage("1", plan.question)], simulate: "model-error" }));
+    expect(chunks.find((c) => c.type === "error")?.errorText).toMatch(/couldn't reach the assistant/);
   });
 
   it("drops the source links when the reply says it doesn't have the answer", async () => {

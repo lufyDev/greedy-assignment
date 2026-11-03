@@ -18,6 +18,8 @@ export type TurnPlan = {
   media: MediaSelection | null;
   /** The exact source block placed in the system prompt. */
   context: string;
+  /** Set when nothing on the page matches: this text is sent and the model is never called, so it can't guess. */
+  fixedReply: string | null;
 };
 
 // Short or pronoun-led messages lean on the previous question ("and the VIP one?").
@@ -31,6 +33,19 @@ const FILE_REQUEST_WORDS = new RegExp(
 );
 
 const FILE_ONLY_CONTEXT = "SOURCES: not needed. The customer only asked for files, so no website text was retrieved.";
+
+export const NOT_COVERED_REPLY =
+  "I don't have that information on this page, so I won't guess. The Greedy Adventures team can help you with this: use Contact us on our website.";
+
+const SMALL_TALK_WORDS = new Set(
+  "hi hello hey hiya namaste thanks thank you thx ty ok okay cool great nice awesome perfect good morning afternoon evening bye goodbye yes yeah yep sure no nope please pls".split(" "),
+);
+
+/** Greetings and acknowledgements: no fact is being asked for, so the model may reply. */
+export function isSmallTalk(text: string): boolean {
+  const words = text.toLowerCase().match(/[a-z]+/g) ?? [];
+  return words.length > 0 && words.every((word) => SMALL_TALK_WORDS.has(word));
+}
 
 export function planTurn(history: ChatLine[]): TurnPlan {
   const userLines = history.filter((l) => l.role === "user");
@@ -48,7 +63,9 @@ export function planTurn(history: ChatLine[]): TurnPlan {
   const chunks = retrieve(retrievalQuery);
   const context = media && !retrievalQuery ? FILE_ONLY_CONTEXT : formatContext(chunks);
 
-  return { question, isFollowUp, retrievalQuery, chunks, mediaRequest, media, context };
+  const fixedReply = !media && chunks.length === 0 && !isSmallTalk(question) ? NOT_COVERED_REPLY : null;
+
+  return { question, isFollowUp, retrievalQuery, chunks, mediaRequest, media, context, fixedReply };
 }
 
 export function formatContext(chunks: RetrievedChunk[]): string {

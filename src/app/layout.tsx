@@ -3,7 +3,7 @@ import { Barlow_Condensed, Inter } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
-const display = Barlow_Condensed({ variable: "--font-barlow", subsets: ["latin"], weight: ["500", "600", "700"] });
+const display = Barlow_Condensed({ variable: "--font-barlow", subsets: ["latin"], weight: ["600", "700"] });
 
 export const metadata: Metadata = {
   title: "Sea View Skydiving — Tandem Jump over Pattaya | Greedy Adventures (prototype)",
@@ -13,6 +13,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#06171f",
+  // Android Chrome: the on-screen keyboard shrinks the page instead of pushing the chat panel up.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

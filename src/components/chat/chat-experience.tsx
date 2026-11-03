@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChatPanelContext } from "./chat-panel-context";
 import { Thread } from "./thread";
+import { useFitPhoneScreen } from "./use-fit-phone-screen";
 
 /** `?simulate=model-error` on the page URL exercises the model-failure path (see README). */
 function simulateFlag(): string | undefined {
@@ -25,6 +26,7 @@ export function ChatExperience({ children }: { children: ReactNode }) {
     [],
   );
   const runtime = useChatRuntime({ transport });
+  useFitPhoneScreen(panelRef, open);
 
   const setOpen = useCallback((next: boolean) => {
     setOpenState(next);
@@ -33,7 +35,9 @@ export function ChatExperience({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!open) return;
-    requestAnimationFrame(() => panelRef.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus());
+    // On touch screens focusing the input would open the keyboard over the suggested questions.
+    const isTouch = window.matchMedia("(pointer: coarse)").matches;
+    requestAnimationFrame(() => (isTouch ? panelRef.current : panelRef.current?.querySelector("textarea"))?.focus());
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
@@ -63,11 +67,12 @@ export function ChatExperience({ children }: { children: ReactNode }) {
         <div
           id="chat-panel"
           ref={panelRef}
+          tabIndex={-1}
           role="dialog"
           aria-modal="false"
           aria-labelledby="chat-panel-title"
           hidden={!open}
-          className="fixed inset-0 z-50 flex animate-pop flex-col overflow-hidden bg-sand shadow-2xl shadow-ink/30 sm:inset-auto sm:right-6 sm:bottom-6 sm:h-[min(44rem,calc(100dvh-3rem))] sm:w-[26rem] sm:rounded-3xl sm:border sm:border-line"
+          className="fixed inset-0 z-50 flex animate-pop flex-col overflow-hidden bg-sand shadow-2xl shadow-ink/30 outline-none sm:inset-auto sm:right-6 sm:bottom-6 sm:h-[min(44rem,calc(100dvh-3rem))] sm:w-[26rem] sm:rounded-3xl sm:border sm:border-line"
         >
           <header className="flex items-center justify-between gap-3 bg-ink px-4 py-3.5 text-white">
             <div className="flex items-center gap-3">

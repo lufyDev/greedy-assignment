@@ -149,7 +149,7 @@ function Composer() {
           submitMode="enter"
           placeholder="Ask about the jump or packages…"
           aria-label="Message the Greedy Adventures assistant"
-          className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 text-sm outline-none placeholder:text-muted focus-visible:outline-none"
+          className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 text-base outline-none placeholder:text-muted focus-visible:outline-none sm:text-sm"
         />
         <AuiIf condition={(s) => !s.thread.isRunning}>
           <ComposerPrimitive.Send

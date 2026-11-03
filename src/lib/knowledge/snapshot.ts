@@ -78,6 +78,13 @@ export const SEA_VIEW_SOURCE: WebsiteSource = {
         "Operated by Dropzone Thailand.",
     },
     {
+      id: "booking-contact",
+      heading: "How to book and contact us",
+      text:
+        "To book, choose your package and use the Check availability button for that package. " +
+        "For anything else, use Contact us on the website. Greedy Adventures is on Instagram at greedy_adventures.",
+    },
+    {
       id: "faq-where",
       heading: "FAQ: Where does the activity take place?",
       text: "Where does the activity take place? The tandem skydive is listed for Pattaya, Thailand.",
