@@ -153,9 +153,15 @@ function buildIndex(sources: WebsiteSource[]): IndexedChunk[] {
 
 const DEFAULT_INDEX = buildIndex(WEBSITE_SOURCES);
 
-export type RetrieveOptions = { limit?: number; minScore?: number; index?: IndexedChunk[] };
+export type RetrieveOptions = {
+  limit?: number;
+  minScore?: number;
+  index?: IndexedChunk[];
+  /** Section ids to include whatever their score. */
+  always?: string[];
+};
 
-export function retrieve(query: string, { limit = 5, minScore = 0.5, index = DEFAULT_INDEX }: RetrieveOptions = {}): RetrievedChunk[] {
+export function retrieve(query: string, { limit = 5, minScore = 0.5, index = DEFAULT_INDEX, always = [] }: RetrieveOptions = {}): RetrievedChunk[] {
   const queryTerms = expandQuery(query);
   if (queryTerms.size === 0) return [];
 
@@ -164,6 +170,8 @@ export function retrieve(query: string, { limit = 5, minScore = 0.5, index = DEF
   for (const c of index) {
     for (const term of new Set(c.terms)) docFreq.set(term, (docFreq.get(term) ?? 0) + 1);
   }
+
+  const isAlways = (c: RetrievedChunk) => always.includes(c.chunkId.split("#")[1]);
 
   return index
     .map(({ chunk, terms, headingTerms }) => {
@@ -181,7 +189,7 @@ export function retrieve(query: string, { limit = 5, minScore = 0.5, index = DEF
       }
       return { ...chunk, score: Math.round(score * 100) / 100 };
     })
-    .filter((c) => c.score >= minScore)
+    .filter((c) => c.score >= minScore || isAlways(c))
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+    .filter((c, rank) => rank < limit || isAlways(c));
 }

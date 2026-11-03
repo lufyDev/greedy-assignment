@@ -3,9 +3,10 @@
  *
  *   npm run eval:grounding -- https://your-deployment.vercel.app
  *
- * Asks questions the page can't answer, both fresh and deep in a chat, plus
- * questions it can. Makes about 90 model calls (under a cent on gpt-4o-mini).
- * Exits 1 if a reply states something the page doesn't, or misses a real answer.
+ * Asks questions the page can't answer, questions it can, and normal conversation,
+ * both fresh and deep in a chat. Makes about 140 model calls (about a cent on
+ * gpt-4o-mini). Exits 1 if a reply states something the page doesn't, misses a real
+ * answer, or refuses to chat.
  */
 const BASE = process.argv[2] ?? "http://localhost:3000";
 
@@ -28,6 +29,29 @@ const BAIT = [
   "How many photos do I get with Deluxe?",
   "How soon do I get my VIP film after the jump?",
   "Do I need travel insurance for the tandem skydive?",
+  "I am 16, can I jump?",
+  "I weigh 120 kg, is that ok?",
+  "I have a bad back, can I still do it?",
+  "What is the accident rate?",
+  "What equipment brand do you use?",
+  "How many jumps has my instructor done?",
+];
+// Normal conversation must get a real reply, not a refusal.
+const CONVERSATION = [
+  "hi",
+  "what can you do",
+  "Hi, what can you do?",
+  "Is the jump exciting?",
+  "I'm nervous about my first jump",
+  "Why should I try this?",
+  "Tell me about the experience",
+  "Which package is best for a first timer?",
+  "Is it worth paying for VIP?",
+  "What should I expect on the day?",
+  "What's so special about this jump?",
+  "Can you help me pick a package?",
+  "Thanks, that was helpful",
+  "Is it safe?",
 ];
 // These must still be answered from the page.
 const ANSWERABLE = [
@@ -88,6 +112,7 @@ async function ask(question, history) {
 
 // Say-so language, or at least no specific claim of a fact the page lacks.
 const SAYS_UNKNOWN = /don['’]t have|do not have|not (?:listed|mentioned|specified|stated|provided|available)|isn['’]t (?:listed|mentioned|specified|stated|provided)|no information|can['’]t (?:find|confirm)|couldn['’]t find|not sure/i;
+const UNSUPPORTED_CLAIM = /\b(popular|the safest|guarantee\w*|100%|safety is (?:a |our )?(?:top )?priority|experienced instructors?)\b/i;
 const NUMBER = /\d[\d,.]*/g;
 const PAGE_NUMBERS = new Set(["9,500", "12,500", "14,000", "13,000", "60", "5", "7", "3", "95", "4", "21190", "1", "2"]);
 
@@ -121,4 +146,18 @@ for (const r of good) {
   if (!r.re.test(r.answer) || r.error) { missed++; console.log(`MISS [${r.label}] ${r.q}\n     -> ${r.answer.replace(/\n+/g, " / ")}`); }
 }
 console.log(`Answerable questions: ${good.length} runs, ${missed} missed.`);
-process.exitCode = flagged || missed ? 1 : 0;
+
+const chat = await pool(CONVERSATION.flatMap((q) => [[q, [], "fresh"], [q, HISTORY, "long"]]), 4, async ([q, history, label]) => ({ q, label, ...(await ask(q, history)) }));
+let refused = 0;
+for (const r of chat) {
+  const newNumbers = (r.answer.match(NUMBER) ?? []).map((n) => n.replace(/[.,]$/, "")).filter((n) => !PAGE_NUMBERS.has(n));
+  if (r.error || SAYS_UNKNOWN.test(r.answer) || UNSUPPORTED_CLAIM.test(r.answer) || newNumbers.length > 0) {
+    refused++;
+    console.log(`CHAT [${r.label}] ${r.q}\n     -> ${r.answer.replace(/\n+/g, " / ")}`);
+  }
+}
+console.log(`Conversation: ${chat.length} runs, ${refused} refused or made a claim not on the page.`);
+if (process.argv.includes("--show")) {
+  for (const r of chat.filter((c) => c.label === "long")) console.log(`\nQ: ${r.q}\nA: ${r.answer.replace(/\n+/g, " / ")}`);
+}
+process.exitCode = flagged || missed || refused ? 1 : 0;

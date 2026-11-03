@@ -126,9 +126,9 @@ function TraceView({ trace }: { trace: TurnTrace }) {
           </p>
         )}
         {!trace.retrievalQuery ? null : trace.usedFixedReply ? (
-          <p className="mt-2 text-muted">No section matched, so the model is not called and can&apos;t guess. The fixed reply below is sent.</p>
+          <p className="mt-2 text-muted">This is a safety or policy topic the page doesn&apos;t cover, so the model is not called and can&apos;t guess. The fixed reply below is sent.</p>
         ) : trace.chunks.length === 0 ? (
-          <p className="mt-2 text-muted">No section matched, so the model is told the page doesn&apos;t cover this.</p>
+          <p className="mt-2 text-muted">No section matched, so the model only gets a general summary of the page.</p>
         ) : (
           <ul className="mt-2 flex flex-wrap gap-2">
             {trace.chunks.map((c) => (

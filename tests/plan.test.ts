@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mockAnswer } from "@/lib/chat/mock";
 import { NOT_COVERED_REPLY, planTurn, type ChatLine } from "@/lib/chat/plan";
+import { SEA_VIEW_SOURCE } from "@/lib/knowledge/snapshot";
 import { buildSystemPrompt, isRefusal } from "@/lib/chat/prompt";
 import { parseChatRequest, MAX_MESSAGES, MAX_TEXT_CHARS } from "@/lib/chat/validate";
 
@@ -31,12 +32,68 @@ describe("planTurn", () => {
   it("marks missing information with an empty source block", () => {
     const plan = planTurn([user("Is there a weight limit?")]);
     expect(plan.chunks).toEqual([]);
-    expect(plan.context).toMatch(/none of the captured website text/);
+    expect(plan.context).toMatch(/nothing on the page matches/);
     expect(plan.fixedReply).toBe(NOT_COVERED_REPLY);
   });
 
-  it.each(["hello", "Thanks!", "ok thanks", "Yes please", "Good morning"])("lets the model reply to the small talk %j", (message) => {
+  it.each([
+    "hello",
+    "Thanks!",
+    "Yes please",
+    "Hi, what can you do",
+    "what can you do",
+    "Is the jump exciting",
+    "I'm nervous about my first jump",
+    "Is it worth paying for VIP?",
+    "Is it safe?",
+    "Do you serve lunch?",
+    "What's the package with the best video?",
+  ])("leaves the normal conversation %j to the model", (message) => {
     expect(planTurn([user(message)]).fixedReply).toBeNull();
+  });
+
+  it.each([
+    "Is there a weight limit?",
+    "What is the weight limit for the VIP package?",
+    "I weigh 120 kg, is that ok?",
+    "How old do I need to be?",
+    "Can my 10 year old son jump?",
+    "I'm 16, can I do this?",
+    "Can kids do this?",
+    "Can I jump if I am pregnant?",
+    "I have a bad back, can I still do it?",
+    "What is the accident rate?",
+    "Is it risky?",
+    "Do I need travel insurance?",
+    "What's the refund policy for Deluxe?",
+    "Is it refundable?",
+    "Can I cancel my booking?",
+    "Can I pay with crypto?",
+    "Do you offer group discounts?",
+    "What if it rains on my jump day?",
+  ])("never sends the sensitive question %j to the model", (message) => {
+    expect(planTurn([user(message)]).fixedReply).toBe(NOT_COVERED_REPLY);
+  });
+
+  it.each(["Can you help me pick a package?", "What packages do you have?", "What's the difference between the options?"])(
+    "gives the model all three packages for %j",
+    (message) => {
+      const ids = planTurn([user(message)]).chunks.map((c) => c.chunkId.split("#")[1]);
+      expect(ids).toEqual(expect.arrayContaining(["package-eco", "package-deluxe", "package-vip"]));
+    },
+  );
+
+  it("gives the model a general summary when nothing matches", () => {
+    const plan = planTurn([user("what can you do")]);
+    expect(plan.chunks).toEqual([]);
+    expect(plan.context).toContain("Sea View Tandem Skydive");
+  });
+
+  it("doesn't block anything the page actually covers", () => {
+    const pageText = SEA_VIEW_SOURCE.sections.map((s) => s.text).join(" ");
+    for (const sentence of pageText.split(/(?<=[.:;])\s+/)) {
+      expect(planTurn([user(sentence)]).fixedReply, sentence).toBeNull();
+    }
   });
 
   it.each(["Is Bangkok pickup available?", "How do I book?", "How can I reach you by phone?", "Do you pick up from my hotel?"])(
@@ -102,6 +159,8 @@ describe("isRefusal", () => {
     "I'm sorry, but I do not have that file.",
     "Unfortunately, I couldn't find that.",
     "I can't assist with that.",
+    "Good question! I don't have that detail on this page.",
+    "That's a great question, but I don't have that detail.",
   ])("treats %j as a refusal", (reply) => {
     expect(isRefusal(reply)).toBe(true);
   });
@@ -111,6 +170,7 @@ describe("isRefusal", () => {
     "Yes, Bangkok pickup is available as a fixed-price add-on.",
     "I've attached the brochure (demo material).",
     "There is no ECO video because ECO has no video coverage.",
+    "Deluxe is ฿12,500. I don't have the delivery time.",
   ])("treats %j as an answer", (reply) => {
     expect(isRefusal(reply)).toBe(false);
   });

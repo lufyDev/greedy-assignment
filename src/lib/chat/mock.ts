@@ -1,5 +1,14 @@
 import type { MediaSelection } from "@/lib/media/types";
-import type { TurnPlan } from "./plan";
+import { NOT_COVERED_REPLY, type TurnPlan } from "./plan";
+
+const CHAT_WORDS = new Set(
+  "hi hello hey hiya namaste thanks thank you thx ty ok okay cool great nice awesome perfect good morning afternoon evening bye goodbye yes yeah yep sure no nope please pls what can do help".split(" "),
+);
+
+function isSmallTalk(text: string): boolean {
+  const words = text.toLowerCase().match(/[a-z]+/g) ?? [];
+  return words.length > 0 && words.every((word) => CHAT_WORDS.has(word));
+}
 
 /**
  * Deterministic answer used in mock mode (no model key configured). It only
@@ -19,6 +28,10 @@ export function mockAnswer(plan: TurnPlan, media: MediaSelection | null): string
   }
 
   const [best] = plan.chunks;
-  if (!best) return plan.fixedReply ?? "Happy to help. Ask me anything about Sea View Skydiving.";
+  if (!best) {
+    return isSmallTalk(plan.question)
+      ? "Happy to help. Ask me about the packages, the plan for the day or pickup, or ask for the brochure or a video."
+      : (plan.fixedReply ?? NOT_COVERED_REPLY);
+  }
   return `From the Sea View Skydiving page (${best.heading}): ${best.text}`;
 }

@@ -66,24 +66,40 @@ describe("traceTurn with a model", () => {
     expect(system).not.toContain("฿14,000");
   });
 
-  it("does not call the model when nothing on the page matches, so it can't guess", async () => {
+  it("does not call the model for a safety topic the page doesn't cover, so it can't guess", async () => {
     const model = new MockLanguageModelV4({ doGenerate: textStep("The maximum weight is 100 kg.") });
     const trace = await traceTurn(planTurn([{ role: "user", text: "Is there a weight limit?" }]), { model });
 
     expect(model.doGenerateCalls).toHaveLength(0);
     expect(trace.usedFixedReply).toBe(true);
-    expect(trace.answer).toMatch(/don't have that information/);
+    expect(trace.answer).toMatch(/don't have it on this page/);
     expect(trace.answer).not.toMatch(/100 kg/);
   });
 
   it("repeats the grounding rule right after the customer's message", async () => {
-    const model = new MockLanguageModelV4({ doGenerate: textStep("I don't have that information on this page.") });
-    await traceTurn(planTurn([{ role: "user", text: "What is the weight limit for the VIP package?" }]), { model });
+    const model = new MockLanguageModelV4({ doGenerate: textStep("I don't have that detail on this page.") });
+    await traceTurn(planTurn([{ role: "user", text: "How fast do you fall during freefall?" }]), { model });
 
     const last = model.doGenerateCalls[0].prompt.at(-1);
     expect(last?.role).toBe("user");
-    expect(JSON.stringify(last?.content)).toContain("What is the weight limit for the VIP package?");
+    expect(JSON.stringify(last?.content)).toContain("How fast do you fall during freefall?");
     expect(JSON.stringify(last?.content)).toContain("Never guess");
+  });
+
+  it("lets the model answer normal conversation that matches nothing on the page", async () => {
+    const model = new MockLanguageModelV4({ doGenerate: textStep("I can tell you about the packages, the plan for the day and more.") });
+    const trace = await traceTurn(planTurn([{ role: "user", text: "Hi, what can you do" }]), { model });
+
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(trace.usedFixedReply).toBe(false);
+    expect(systemText(model)).toContain("General summary of the page");
+  });
+
+  it("replaces a reply that states a number not on the page", async () => {
+    const model = new MockLanguageModelV4({ doGenerate: textStep("You reach speeds of around 120 mph!") });
+    const trace = await traceTurn(planTurn([{ role: "user", text: "How fast do you fall during freefall?" }]), { model });
+    expect(trace.answer).not.toContain("120");
+    expect(trace.answer).toMatch(/don't have that detail/);
   });
 
   it("reports a model failure instead of an answer", async () => {
@@ -131,6 +147,38 @@ describe("streamReply with a model", () => {
     expect(model.doStreamCalls[0].prompt.filter((m) => m.role !== "system")).toHaveLength(3);
   });
 
+  const streamingModel = (...deltas: string[]) =>
+    new MockLanguageModelV4({
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          chunks: [
+            { type: "text-start" as const, id: "t" },
+            ...deltas.map((delta) => ({ type: "text-delta" as const, id: "t", delta })),
+            { type: "text-end" as const, id: "t" },
+            { type: "finish" as const, finishReason: { unified: "stop" as const, raw: undefined }, usage },
+          ],
+        }),
+      }),
+    });
+  const streamedText = (chunks: { type: string; delta?: string }[]) => chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("");
+
+  it("never streams an invented number, even split across chunks", async () => {
+    const plan = planTurn([{ role: "user", text: "How fast do you fall during freefall?" }]);
+    const model = streamingModel("You reach around 1", "20 mph, ", "what a thrill!");
+    const chunks = await readStream(await streamReply({ plan, messages: [userMessage("1", plan.question)], model }));
+
+    expect(streamedText(chunks)).not.toContain("120");
+    expect(streamedText(chunks)).toMatch(/don't have that detail/);
+    expect(chunks.filter((c) => c.messageMetadata).at(-1)?.messageMetadata.sources).toEqual([]);
+  });
+
+  it("lets a reply through when its numbers are on the page", async () => {
+    const plan = planTurn([{ role: "user", text: "How high is the jump?" }]);
+    const model = streamingModel("You exit at ", "13,000 ft, ", "what a view!");
+    const chunks = await readStream(await streamReply({ plan, messages: [userMessage("1", plan.question)], model }));
+    expect(streamedText(chunks)).toBe("You exit at 13,000 ft, what a view!");
+  });
+
   it("sends the fixed reply in a long chat without calling the model", async () => {
     const model = new MockLanguageModelV4({ doStream: async () => { throw new Error("must not be called"); } });
     const messages: ChatUIMessage[] = [
@@ -142,7 +190,7 @@ describe("streamReply with a model", () => {
     const chunks = await readStream(await streamReply({ plan, messages, model }));
 
     expect(model.doStreamCalls).toHaveLength(0);
-    expect(chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("")).toMatch(/don't have that information/);
+    expect(chunks.filter((c) => c.type === "text-delta").map((c) => c.delta).join("")).toMatch(/don't have it on this page/);
     expect(chunks.find((c) => c.type === "start").messageMetadata.sources).toEqual([]);
   });
 
@@ -159,14 +207,14 @@ describe("streamReply with a model", () => {
           chunks: [
             { type: "text-start", id: "t" },
             { type: "text-delta", id: "t", delta: "I don't have " },
-            { type: "text-delta", id: "t", delta: "the VIP refund policy on this page." },
+            { type: "text-delta", id: "t", delta: "the delivery time on this page." },
             { type: "text-end", id: "t" },
             { type: "finish", finishReason: { unified: "stop", raw: undefined }, usage },
           ],
         }),
       }),
     });
-    const plan = planTurn([{ role: "user", text: "What is the VIP refund policy?" }]);
+    const plan = planTurn([{ role: "user", text: "When do I get my VIP film?" }]);
     expect(plan.chunks.length).toBeGreaterThan(0);
     const chunks = await readStream(await streamReply({ plan, messages: [userMessage("1", plan.question)], model }));
 

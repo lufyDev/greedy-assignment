@@ -48,18 +48,26 @@ POST /api/chat
        media       rules decide if the customer asked for a PDF / video / both (src/lib/media/intent.ts)
                    and resolve them to catalog files or "unavailable" reasons (src/lib/media/resolve.ts)
   3. respond
-       fixed reply nothing on the page matches and it isn't small talk or a file request:
-                   send "I don't have that information" without calling the model
+       fixed reply a safety or policy topic the page doesn't cover (weight, age, health, refunds,
+                   payment, weather and so on): send "I don't have it on this page" without calling the model
        model       streamText with a system prompt that holds only the retrieved source text and
-                   the files attached. The no-guessing rule is repeated after the customer's message.
-                   If files were requested, the first step is forced to call the share_media tool,
-                   whose result the chat renders as PDF / video cards.
+                   the files attached. The facts-from-sources rule is repeated after the customer's
+                   message. If files were requested, the first step is forced to call the share_media
+                   tool, whose result the chat renders as PDF / video cards.
+       number guard each block of reply text is held until complete; if it states a number that isn't
+                   on the page (src/lib/chat/number-guard.ts), a "don't have that detail" reply replaces it
        mock        same plan, deterministic text, same tool-result wire format
   4. metadata      each reply carries its sources (shown as links under the answer) and the mode;
                    sources are dropped if the reply opens by saying it can't answer
 ```
 
-Why the model isn't trusted to refuse on its own: in testing, `gpt-4o-mini` answered "Is there a weight limit?" correctly on its own, but several turns into a chat it invented "100 kg (220 lbs)". A wrong safety limit is the worst failure here, so questions with no matching text never reach the model, and for partial matches the rule is repeated where it can't fade.
+How the assistant stays friendly without making things up. This took three tries:
+
+1. **Prompt rule only.** Natural replies, but several turns into a chat `gpt-4o-mini` answered "Is there a weight limit?" with an invented "100 kg (220 lbs)".
+2. **Strict gate.** Anything with no matching page text got a fixed reply. No more invented facts, but it refused "what can you do?" and felt useless to talk to.
+3. **Current design.** Only safety and policy topics the page doesn't cover skip the model. Everything else goes to a warm prompt that allows feelings and opinions but requires facts to come from the sources. A final deterministic check blocks any number that isn't on the page, since the warm prompt alone still produced "around 120 mph" for freefall speed.
+
+The cost of the number check is that replies appear all at once after a loading indicator, not word by word.
 
 Why media selection is rule-based: the brief asks for repeatable checks of media selection and fallbacks. Rules make "which file, if any" deterministic and unit-tested; the model only writes the words around the files. The model can still call `share_media` on its own for phrasing the rules miss.
 
@@ -95,12 +103,13 @@ It never shows API keys and stores no conversations; test runs are single-questi
 npm test
 ```
 
-92 tests, no API key needed:
+143 tests, no API key needed:
 
 - `tests/media.test.ts`: media selection for the four brief prompts; knowledge questions that mention "video" but are not file requests; ECO video and other-activity requests reported as unavailable; missing catalog files.
 - `tests/retrieve.test.ts`: retrieval ranking, "no match" for uncovered topics, filler words and contractions ("I'd" is not "ID").
-- `tests/plan.test.ts`: follow-up retrieval, pure file requests needing no page text, the exact files named to the model, which questions skip the model, refusal detection, mock-mode fallbacks, request validation (system-message injection, length, roles).
-- `tests/agent.test.ts`: the real model path driven by the AI SDK's `MockLanguageModelV4`: `share_media` is forced for file requests and the rules' selection wins over the model's arguments; the model can still pick media itself; only retrieved source text reaches the model; questions with no match never call it, even in a long chat; the whole conversation is sent (memory); replies that say they can't answer drop their source link; a reply stopped mid-tool-call doesn't break the next turn; model failures become an error the chat shows.
+- `tests/number-guard.test.ts`: which numbers may reach the customer (page facts, price maths, the customer's own numbers) and which may not.
+- `tests/plan.test.ts`: follow-up retrieval, pure file requests needing no page text, the exact files named to the model, which questions skip the model and which stay with it, refusal detection, mock-mode fallbacks, request validation (system-message injection, length, roles).
+- `tests/agent.test.ts`: the real model path driven by the AI SDK's `MockLanguageModelV4`: `share_media` is forced for file requests and the rules' selection wins over the model's arguments; the model can still pick media itself; only retrieved source text reaches the model; sensitive topics never call it, even in a long chat; invented numbers are replaced, even when split across stream chunks; the whole conversation is sent (memory); replies that say they can't answer drop their source link; a reply stopped mid-tool-call doesn't break the next turn; model failures become an error the chat shows.
 
 ### Real model
 
@@ -108,7 +117,7 @@ npm test
 npm run eval:grounding -- https://greedy-assignment-six.vercel.app
 ```
 
-Asks 18 questions the page can't answer (weight limit, age, refunds, pickup cost and so on), twice each, both fresh and deep in a chat, plus 10 it can. Fails if a reply states something the page doesn't or misses a real answer. About 90 model calls, under a cent. Last run: 0 of 72 flagged, 0 of 20 missed. It's a check against a real model, so results can vary between runs.
+Asks 24 questions the page can't answer (weight limit, age, freefall speed, pickup cost and so on), 10 it can, and 14 lines of normal conversation ("what can you do?", "I'm nervous"), both fresh and deep in a chat. Fails if a reply states something the page doesn't, misses a real answer, or refuses to chat. About 140 model calls, about a cent. Last run: 0 of 96 bait replies flagged, 0 of 20 answers missed, 1 of 28 conversation replies flagged (it called Deluxe "a popular option", which the page doesn't say). It's a check against a real model, so results can vary between runs.
 
 ### Manual
 
@@ -125,6 +134,9 @@ Run each in the chat (bottom-right button), in order, in one conversation:
 | 7 | Is there a weight limit? | Says the page doesn't cover it, with no made-up number; suggests contacting the team |
 | 8 | Send me the paragliding brochure | Says there are no files for paragliding |
 | 9 | What is the VIP refund policy? | Says the page doesn't cover it, with no source link under the reply |
+| 10 | Hi, what can you do? | A friendly reply listing what it can help with |
+| 11 | I'm nervous about my first jump | Reassures using page details, no promises about safety |
+| 12 | How fast do you fall during freefall? | Says it doesn't have that detail, no made-up speed |
 
 Model failure: open [`/?simulate=model-error`](https://greedy-assignment-six.vercel.app/?simulate=model-error), ask anything → the chat shows an error message with a Try again button and the page keeps working. Without a key, check that replies show the **Mock mode** label.
 
@@ -135,7 +147,9 @@ Knowledge view: ask question 2 above in "Test a question" → the source block c
 - Knowledge is a one-time manual capture of one page; it won't notice website changes.
 - Keyword retrieval works for a page this size; a larger site would need embeddings or a hybrid search.
 - Media intent rules and retrieval are English-only. Intent rules are tuned to common phrasing; anything they miss falls back to the model's own `share_media` call.
-- If retrieval misses a real answer because of unusual wording, the customer gets "I don't have that" rather than a guess. That's the intended way to fail, but it can happen.
+- The number check can't catch invented claims with no digits, such as calling a package "popular". The prompt rule and the real-model check cover those, but less strictly.
+- The sensitive-topic list is keyword-based, so an unusual wording can reach the model, and a harmless question using one of those words gets the fixed reply.
+- Replies appear all at once, not word by word, because of the number check.
 - Source links point to the sections retrieved for the question, not to exact sentences.
 - Conversation memory lives in the browser tab (not persisted across reloads).
 - No rate limiting, so a public demo can spend from the model key. A real launch would need limits.

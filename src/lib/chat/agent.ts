@@ -10,6 +10,7 @@ import {
   toUIMessageStream,
   type LanguageModel,
   type ModelMessage,
+  type TextStreamPart,
   type UIMessage,
 } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
@@ -17,6 +18,7 @@ import { z } from "zod";
 import { resolveMedia } from "@/lib/media/resolve";
 import type { MediaSelection } from "@/lib/media/types";
 import { mockAnswer } from "./mock";
+import { NUMBER_NOT_ON_PAGE_REPLY, statesUnknownNumber } from "./number-guard";
 import { getLanguageModel, getModelInfo, type ModelInfo } from "./model";
 import type { TurnPlan } from "./plan";
 import { buildSystemPrompt, GROUNDING_REMINDER, isRefusal } from "./prompt";
@@ -113,6 +115,31 @@ function replyMetadata(plan: TurnPlan, info: ModelInfo): ReplyMetadata {
 
 const FRIENDLY_ERROR = "Sorry, I couldn't reach the assistant just now. Please try again in a moment.";
 
+/**
+ * Holds each block of reply text until it is complete, then releases it only if
+ * all its numbers are on the page. Tool results (the file cards) pass straight through.
+ */
+function withNumberGuard<T extends TextStreamPart<AgentTools>>(stream: ReadableStream<T>, customerMessage: string): ReadableStream<T> {
+  let held: Extract<T, { type: "text-delta" }>[] = [];
+  return stream.pipeThrough(
+    new TransformStream<T, T>({
+      transform(part, controller) {
+        if (part.type === "text-delta") {
+          held.push(part as Extract<T, { type: "text-delta" }>);
+          return;
+        }
+        if (part.type === "text-end" && held.length > 0) {
+          const text = held.map((delta) => delta.text).join("");
+          if (statesUnknownNumber(text, customerMessage)) controller.enqueue({ ...held[0], text: NUMBER_NOT_ON_PAGE_REPLY });
+          else held.forEach((delta) => controller.enqueue(delta));
+          held = [];
+        }
+        controller.enqueue(part);
+      },
+    }),
+  );
+}
+
 /** Adds the grounding reminder after the customer's latest message, where it can't fade as the chat grows. */
 function withGroundingReminder(messages: ModelMessage[]): ModelMessage[] {
   const last = messages.at(-1);
@@ -136,7 +163,7 @@ export async function streamReply({
   const metadata = replyMetadata(plan, cfg.info);
 
   if (plan.fixedReply && !options.simulate) {
-    return createUIMessageStreamResponse({ stream: fixedStream(plan, metadata, plan.fixedReply) });
+    return createUIMessageStreamResponse({ stream: fixedStream(plan, { ...metadata, sources: [] }, plan.fixedReply) });
   }
   if (!cfg.model) return createUIMessageStreamResponse({ stream: fixedStream(plan, metadata, mockAnswer(plan, plan.media)) });
 
@@ -149,7 +176,7 @@ export async function streamReply({
     prepareStep: cfg.prepareStep,
     stopWhen: isStepCount(3),
     maxRetries: 1,
-    temperature: 0,
+    temperature: 0.2,
     abortSignal,
     onError: ({ error }) => console.error("[chat] model error:", error),
   });
@@ -157,7 +184,7 @@ export async function streamReply({
   let replyText = "";
   return createUIMessageStreamResponse({
     stream: toUIMessageStream<AgentTools, ChatUIMessage>({
-      stream: result.stream,
+      stream: withNumberGuard(result.stream, plan.question),
       tools: cfg.tools,
       originalMessages: messages,
       sendReasoning: false,
@@ -210,7 +237,7 @@ export type TurnTrace = {
   mediaRequest: TurnPlan["mediaRequest"];
   media: MediaSelection | null;
   mediaSelectedBy: "rules" | "model" | null;
-  /** True when nothing on the page matched, so the model was not called. */
+  /** True for a safety or policy topic the page doesn't cover, so the model was not called. */
   usedFixedReply: boolean;
   answer: string | null;
   error: string | null;
@@ -263,9 +290,10 @@ export async function traceTurn(plan: TurnPlan, options: AgentOptions = {}): Pro
       prepareStep: cfg.prepareStep,
       stopWhen: isStepCount(3),
       maxRetries: 1,
-      temperature: 0,
+      temperature: 0.2,
     });
-    return { ...base, media, mediaSelectedBy, answer: result.text, error: null, durationMs: Date.now() - started };
+    const answer = statesUnknownNumber(result.text, plan.question) ? NUMBER_NOT_ON_PAGE_REPLY : result.text;
+    return { ...base, media, mediaSelectedBy, answer, error: null, durationMs: Date.now() - started };
   } catch (err) {
     console.error("[inspect] model error:", err);
     return { ...base, media, mediaSelectedBy, answer: null, error: FRIENDLY_ERROR, durationMs: Date.now() - started };
